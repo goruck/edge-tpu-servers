@@ -1,5 +1,5 @@
 # edge-tpu-servers
-This project enables running object and face detection / recognition using the Google edge Tensorflow Processing Unit (TPU) based [development board](https://coral.withgoogle.com/products/dev-board/).
+This project enables running object and face detection / recognition using the Google edge Tensorflow Processing Unit (TPU) based [development board](https://coral.withgoogle.com/products/dev-board/). This work was done originally as part of the [smart-zoneminder](https://github.com/goruck/smart-zoneminder) project.
 
 The TPU-based object and face detection server, [detect_servers_tpu.py](./detect_servers_tpu.py), runs [TPU-based](https://cloud.google.com/edge-tpu/) Tensorflow Lite inference engines using the [Google Coral](https://coral.withgoogle.com/) Python APIs and employs [zerorpc](http://www.zerorpc.io/) to communicate with clients. The object detection can optionally skip inference on consecutive ZoneMinder Alarm frames to minimize processing time which obviously assumes the same object is in every frame. The server is run as a Linux service using systemd and it is configured to come up automatically after power-on. 
 
