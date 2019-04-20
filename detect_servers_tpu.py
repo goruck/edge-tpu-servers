@@ -4,10 +4,10 @@ Detect objects and faces using tensorflow-tpu served by zerorpc.
 This needs to be called from a zerorpc client with
 an array of alarm frame image paths.
 
-This is part of the smart-zoneminder project.
+This was originally part of the smart-zoneminder project.
 See https://github.com/goruck/smart-zoneminder
 
-Copyright (c) 2018, 2019 Lindo St. Angel
+Copyright (c) 2019 Lindo St. Angel
 """
 
 import numpy as np
@@ -32,8 +32,6 @@ face_config = config['faceDetServer']
 # Tensorflow object and face detection file system paths.
 PATH_TO_OBJ_MODEL = obj_config['objModelPath']
 PATH_TO_LABEL_MAP = obj_config['labelMapPath']
-# If consecutive ZoneMinder image frames are found then skip this many after the first.
-CON_IMG_SKIP = obj_config['conseqImagesToSkip']
 # Minimum score for valid TF object detection. 
 MIN_SCORE_THRESH = obj_config['minScore']
 # Heartbeat interval for zerorpc client in ms.
@@ -110,59 +108,14 @@ def variance_of_laplacian(image):
 	# measure, which is simply the variance of the Laplacian
 	return cv2.Laplacian(image, cv2.CV_64F).var()
 
-def skip_inference(frame_num, monitor, labels, image_path, objects_in_image):
-    """
-    If consecutive frames then repeat last label and skip a new inference.
-    
-    Image paths must be in the form of:
-    '/nvr/zoneminder/events/BackPorch/18/06/20/19/20/04/00224-capture.jpg'.
-    """
-    old_frame_num = frame_num
-    old_monitor = monitor
-    skip = False
-    try:
-        frame_num = int((image_path.split('/')[-1]).split('-')[0])
-        monitor = image_path.split('/')[4]
-    except (ValueError, IndexError):
-        logging.error("Could not derive information from image path.")
-        objects_in_image.append({'image': image_path, 'labels': []})
-        skip = True
-        return skip, frame_num, monitor
-                    
-    # Only apply skip logic if frames are from the same monitor. 
-    if monitor == old_monitor:
-        # Only apply skip logic if alarm frames are from the same event.
-        # Intra-event frames are monotonically increasing.
-        frame_diff = frame_num - old_frame_num
-        if frame_diff > 0:
-            # Skip CON_IMG_SKIP frames after the first one. 
-            if frame_diff <= CON_IMG_SKIP:
-                objects_in_image.append({'image': image_path, 'labels': labels})
-                logging.debug('monitor {} old_monitor {} frame_num {} old_frame_num {}'
-                    .format(monitor,old_monitor,frame_num,old_frame_num))
-                logging.debug('Consecutive frame {}, skipping detect and copying previous labels.'
-                    .format(frame_num))
-                skip = True
-                        
-    return skip, frame_num, monitor
-
 # zerorpc obj det server.
 class ObjDetectRPC(object):
     def detect_objects(self, test_image_paths):
         objects_in_image = [] # holds all objects found in image
         labels = [] # labels of detected objects
-        frame_num = 0 # ZoneMinder current alarm frame number
-        monitor = '' # ZoneMinder current monitor name
 
         for image_path in test_image_paths:
             logging.debug('**********Find object(s) for {}'.format(image_path))
-
-            # If consecutive frames then repeat last label and skip inference.
-            # This behavior controlled by CON_IMG_SKIP.
-            skip, frame_num, monitor = skip_inference(frame_num, monitor,
-                labels, image_path, objects_in_image)
-            if skip is True:
-                continue
 
             # Read image from disk. 
             img = cv2.imread(OBJ_MOUNT_POINT + image_path)

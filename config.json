@@ -4,7 +4,6 @@
         "objModelPath": "/usr/lib/python3/dist-packages/edgetpu/test_data/mobilenet_ssd_v2_coco_quant_postprocess_edgetpu.tflite",
         "labelMapPath": "/usr/lib/python3/dist-packages/edgetpu/test_data/coco_labels.txt",
         "mountPoint": "/mnt",
-        "conseqImagesToSkip": 0,
         "minScore": 0.5,
         "zerorpcHeartBeat": 60000,
         "zerorpcPipe": "tcp://192.168.1.131:1234"
