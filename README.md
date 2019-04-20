@@ -1,7 +1,7 @@
 # edge-tpu-servers
 This project enables running object and face detection / recognition using the Google edge Tensorflow Processing Unit (TPU) based [development board](https://coral.withgoogle.com/products/dev-board/). This work was done originally as part of the [smart-zoneminder](https://github.com/goruck/smart-zoneminder) project.
 
-The TPU-based object and face detection server, [detect_servers_tpu.py](./detect_servers_tpu.py), runs [TPU-based](https://cloud.google.com/edge-tpu/) Tensorflow Lite inference engines using the [Google Coral](https://coral.withgoogle.com/) Python APIs and employs [zerorpc](http://www.zerorpc.io/) to communicate with clients. The object detection can optionally skip inference on consecutive ZoneMinder Alarm frames to minimize processing time which obviously assumes the same object is in every frame. The server is run as a Linux service using systemd and it is configured to come up automatically after power-on. 
+The TPU-based object and face detection server, [detect_servers_tpu.py](./detect_servers_tpu.py), runs [TPU-based](https://cloud.google.com/edge-tpu/) Tensorflow Lite inference engines using the [Google Coral](https://coral.withgoogle.com/) Python APIs and employs [zerorpc](http://www.zerorpc.io/) to communicate with clients. The server is run as a Linux service using systemd and it is configured to come up automatically after power-on. 
 
 Images are sent to the object detection as an array of strings, in the following form.
 ```javascript
@@ -185,7 +185,7 @@ $ python3
 
 13. Run the svm-based face classifier training program, [train.py](./train.py). This will create two pickle files - one for the svm model and one for the model labels.
 
-14. Mount ZoneMinder's alarm image store on the Dev Board so the server can find the alarm images and process them. The store should be auto-mounted using ```sshfs``` at startup which is done by an entry in ```/etc/fstab```.
+14. Mount a local or remote image store on the Dev Board so the server can find theimages and process them. The store should be auto-mounted using ```sshfs``` at startup which is done by an entry in ```/etc/fstab```.
 ```bash
 # Setup sshfs.
 $ sudo apt-get install sshfs
@@ -199,7 +199,7 @@ $ mkdir -p $HOME/.ssh
 $ chmod 0700 $HOME/.ssh
 # Create the key pair
 $ ssh-keygen -t rsa
-# Install the public key on the server hosting ZoneMinder.
+# Install the public key on the server hosting the images.
 $ ssh-copy-id -i $HOME/.ssh/id_rsa.pub lindo@192.168.1.4
 
 # Corresponsing /etc/fstab entry:
@@ -211,7 +211,7 @@ lindo@192.168.1.4:/nvr /mnt/nvr fuse.sshfs auto,user,_netdev,reconnect,uid=1000,
 $ sudo mount lindo@192.168.1.4/nvr
 ```
 
-15. Edit the [config.json](./config.json) to suit your installation. The configuration parameters are documented in server code. Since the TPU detection servers and ZoneMinder are running on different machines make sure both are using the same TCP socket.
+15. Edit the [config.json](./config.json) to suit your installation. The configuration parameters are documented in server code.
 
 16. Use systemd to run the server as a Linux service. Edit [detect-tpu.service](./detect-tpu.service) to suit your configuration and copy the file to ```/lib/systemd/system/detect-tpu.service```. Then enable and start the service:
 ```bash
