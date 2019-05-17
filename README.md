@@ -93,6 +93,9 @@ $ sudo mkswap /swapfile
 # Enable swapping.
 $ sudo swapon /swapfile
 
+# Install dependencies.
+$ sudo apt install build-essential cmake git libgtk2.0-dev pkg-config libavcodec-dev libavformat-dev libswscale-dev  libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev libdc1394-22-dev protobuf-compiler libgflags-dev libgoogle-glog-dev libblas-dev libhdf5-serial-dev liblmdb-dev libleveldb-dev liblapack-dev libsnappy-dev libprotobuf-dev libopenblas-dev libgtk2.0-dev libboost-dev libboost-all-dev libeigen3-dev libatlas-base-dev libne10-10 libne10-dev
+
 # Get the latest version of dlib from GitHub.
 $ git clone https://github.com/davisking/dlib.git
 # Build the main dlib library.
@@ -119,7 +122,6 @@ $ cd /media/mendel
 
 # Install dependencies.
 $ sudo apt install python3-dev python3-pip python3-numpy
-$ sudo apt install build-essential cmake git libgtk2.0-dev pkg-config libavcodec-dev libavformat-dev libswscale-dev  libtbb2 libtbb-dev libjpeg-dev libpng-dev libtiff-dev libdc1394-22-dev protobuf-compiler libgflags-dev libgoogle-glog-dev libblas-dev libhdf5-serial-dev liblmdb-dev libleveldb-dev liblapack-dev libsnappy-dev libprotobuf-dev libopenblas-dev libgtk2.0-dev libboost-dev libboost-all-dev libeigen3-dev libatlas-base-dev libne10-10 libne10-dev
 $ pip3 install neon
 $ sudo apt install libneon27-dev
 $ sudo apt install libneon27-gnutls-dev
