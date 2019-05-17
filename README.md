@@ -220,4 +220,5 @@ $ sudo mount lindo@192.168.1.4/nvr
 $ sudo systemctl enable detect-tpu.service && sudo systemctl start detect-tpu.service
 ```
 
-17. Test the entire setup by editing ```detect_dervers_test.py``` with paths to test images and running that program.
+17. Test the entire setup by editing ```detect_servers_test.py``` with paths to test images and running that program.
+
