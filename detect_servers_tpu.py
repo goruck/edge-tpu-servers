@@ -4,10 +4,10 @@ Detect objects and faces using tensorflow-tpu served by zerorpc.
 This needs to be called from a zerorpc client with
 an array of alarm frame image paths.
 
-This was originally part of the smart-zoneminder project.
+This is part of the smart-zoneminder project.
 See https://github.com/goruck/smart-zoneminder
 
-Copyright (c) 2019 Lindo St. Angel
+Copyright (c) 2018, 2019 Lindo St. Angel
 """
 
 import numpy as np
@@ -17,6 +17,8 @@ import pickle
 import cv2
 import logging
 import gevent
+import face_recognition
+from signal import SIGINT, SIGTERM
 from edgetpu.detection.engine import DetectionEngine
 
 logging.basicConfig(level=logging.ERROR)
@@ -44,9 +46,9 @@ OBJ_ZRPC_PIPE = obj_config['zerorpcPipe']
 OBJ_MOUNT_POINT = obj_config['mountPoint']
 
 ### Face detection configuration. ###
-# Tensorflow face detection file system path.
+# Tensorflow face detection model path.
 PATH_TO_FACE_DET_MODEL = face_config['faceDetModelPath']
-# py torch face embeddings model path. 
+# py torch face embeddings model path (if used).
 PATH_TO_FACE_EMB_MODEL = face_config['faceEmbModelPath']
 # Heartbeat interval for zerorpc client in ms.
 # This must match the zerorpc client config. 
@@ -63,6 +65,11 @@ SVM_LABEL_PATH = face_config['svmLabelPath']
 MIN_SVM_PROBA = face_config['minSvmProba']
 # Images with Variance of Laplacian less than this are declared blurry. 
 FOCUS_MEASURE_THRESHOLD = face_config['focusMeasureThreshold']
+# Faces with width or height less than this are too small for recognition.
+# In pixels.
+MIN_FACE = face_config['minFace']
+# Number of times to resample for dlib face encoder.
+NUM_JITTERS = face_config['numJitters']
 
 def ReadLabelFile(file_path):
     # Function to read labels from text files.
@@ -79,34 +86,31 @@ obj_engine = DetectionEngine(PATH_TO_OBJ_MODEL)
 labels_map = ReadLabelFile(PATH_TO_LABEL_MAP)
 face_engine = DetectionEngine(PATH_TO_FACE_DET_MODEL)
 
-# Initialize face embeddings model.
-embedder = cv2.dnn.readNetFromTorch(PATH_TO_FACE_EMB_MODEL)
-
 # Load svm face recognition model along with the label encoder.
 with open(SVM_MODEL_PATH, 'rb') as fp:
-	recognizer = pickle.load(fp)
+    recognizer = pickle.load(fp)
 with open(SVM_LABEL_PATH, 'rb') as fp:
-	le = pickle.load(fp)
+    le = pickle.load(fp)
 
 def svm_face_classifier(encoding, min_proba):
-	# perform svm classification to recognize the face based on 128D encoding
-	# note: reshape(1,-1) converts 1D array into 2D
-	preds = recognizer.predict_proba(encoding.reshape(1, -1))[0]
-	j = np.argmax(preds)
-	proba = preds[j]
-	logging.debug('svm proba {} name {}'.format(proba, le.classes_[j]))
-	if proba >= min_proba:
-		name = le.classes_[j]
-		logging.debug('svm says this is {}'.format(name))
-	else:
-		name = None # prob too low to recog face
-		logging.debug('svm cannot recognize face')
-	return name
+    # perform svm classification to recognize the face based on 128D encoding
+    # note: reshape(1,-1) converts 1D array into 2D
+    preds = recognizer.predict_proba(encoding.reshape(1, -1))[0]
+    j = np.argmax(preds)
+    proba = preds[j]
+    logging.debug('svm proba {} name {}'.format(proba, le.classes_[j]))
+    if proba >= min_proba:
+        name = le.classes_[j]
+        logging.debug('svm says this is {}'.format(name))
+    else:
+        name = None # prob too low to recog face
+        logging.debug('svm cannot recognize face')
+    return name
 
 def variance_of_laplacian(image):
-	# compute the Laplacian of the image and then return the focus
-	# measure, which is simply the variance of the Laplacian
-	return cv2.Laplacian(image, cv2.CV_64F).var()
+    # compute the Laplacian of the image and then return the focus
+    # measure, which is simply the variance of the Laplacian
+    return cv2.Laplacian(image, cv2.CV_64F).var()
 
 # zerorpc obj det server.
 class ObjDetectRPC(object):
@@ -191,7 +195,7 @@ class FaceDetectRPC(object):
                     # Need roi shape for later conversion of face coords.
                     (h, w) = roi.shape[:2]
                     # Resize roi for face detection.
-                    # The tpu face det requires (320, 320).
+                    # The tpu face det model used requires (320, 320).
                     res = cv2.resize(roi, dsize=(320, 320), interpolation=cv2.INTER_AREA)
                     #cv2.imwrite('./res.jpg', res)
 
@@ -199,7 +203,7 @@ class FaceDetectRPC(object):
                     # to each face in the input image using the TPU engine.
                     # NB: reshape(-1) converts the np img array into 1-d. 
                     detection = face_engine.DetectWithInputTensor(res.reshape(-1),
-                        threshold=0.1, top_k=3)
+                        threshold=0.1, top_k=1)
                     if not detection:
                         # No face detected...move on to next image.
                         logging.debug('No face detected.')
@@ -211,33 +215,40 @@ class FaceDetectRPC(object):
                     (face_left, face_top, face_right, face_bottom) = box.astype('int')
                     face_roi = roi[face_top:face_bottom, face_left:face_right, :]
                     #cv2.imwrite('./face_roi.jpg', face_roi)
+                    (f_h, f_w) = face_roi.shape[:2]
+                    # If face width or height are not sufficiently large then skip.
+                    if f_h < MIN_FACE or f_w < MIN_FACE:
+                        logging.debug('Face too small to recognize.')
+                        label['face'] = None
+                        continue
 
                     # Compute the focus measure of the face
                     # using the Variance of Laplacian method.
                     # See https://www.pyimagesearch.com/2015/09/07/blur-detection-with-opencv/
                     gray = cv2.cvtColor(face_roi, cv2.COLOR_BGR2GRAY)
                     fm = variance_of_laplacian(gray)
-
                     # If fm below a threshold then face probably isn't clear enough
                     # for face recognition to work, so skip it. 
                     if fm < FOCUS_MEASURE_THRESHOLD:
                         logging.debug('Face too blurry to recognize.')
-                        name = None
-                    else:
-                        # Find the 128-dimension face encoding for face in image.
-                        # Construct a blob for the face roi, then pass the blob
-                        # through the face embedding model to obtain the 128-d
-                        # quantification of the face.
-                        face_blob = cv2.dnn.blobFromImage(face_roi, 1.0 / 255, (96, 96),
-                            (0, 0, 0), swapRB=True, crop=False)
-                        embedder.setInput(face_blob)
-                        encoding = embedder.forward()[0]
-                        # Perform svm classification on the encodings to recognize the face.
-                        name = svm_face_classifier(encoding, MIN_SVM_PROBA)
+                        label['face'] = None
+                        continue
+
+                    # Find the 128-dimension face encoding for face in image.
+                    # Convert image roi from BGR (OpenCV ordering) to dlib ordering (RGB).
+                    rgb = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
+                    # Convert face bbox into dlib format.
+                    boxes = [(face_top, face_right, face_bottom, face_left)]
+                    # Generate encodings. Only one face is assumed so take the 1st element. 
+                    encoding = face_recognition.face_encodings(face_image=rgb,
+                        known_face_locations=boxes, num_jitters=NUM_JITTERS)[0]
+
+                    # Perform svm classification on the encodings to recognize the face.
+                    name = svm_face_classifier(encoding, MIN_SVM_PROBA)
 
                     # Add face name to label metadata.
                     label['face'] = name
-	        # Add processed image to output list. 
+            # Add processed image to output list. 
             objects_detected_faces.append(obj)
         # Convert json to string and return data. 
         return(json.dumps(objects_detected_faces))
@@ -245,10 +256,17 @@ class FaceDetectRPC(object):
 # Setup face detection server. 
 face_s = zerorpc.Server(FaceDetectRPC(), heartbeat=FACE_ZRPC_HEARTBEAT)
 face_s.bind(FACE_ZRPC_PIPE)
+# Register graceful ways to stop server. 
+gevent.signal(SIGINT, face_s.stop) # Ctrl-C
+gevent.signal(SIGTERM, face_s.stop) # termination
 
 # Setup object detection server. 
 obj_s = zerorpc.Server(ObjDetectRPC(), heartbeat=OBJ_ZRPC_HEARTBEAT)
 obj_s.bind(OBJ_ZRPC_PIPE)
+# Register graceful ways to stop server. 
+gevent.signal(SIGINT, obj_s.stop) # Ctrl-C
+gevent.signal(SIGTERM, obj_s.stop) # termination
 
-# Startup both servers. 
+# Startup both servers.
+# This will block until a gevent SIGINT or SIGTERM signal is caught.
 gevent.joinall([gevent.spawn(face_s.run), gevent.spawn(obj_s.run)])
