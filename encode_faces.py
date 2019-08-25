@@ -4,7 +4,7 @@ Find faces in given images and encode into 128-D embeddings.
 Usage:
 $ python3 encode_faces.py --dataset dataset --encodings encodings.pickle
 
-Part of the smart-zoneminder project:
+Originally part of the smart-zoneminder project:
 See https://github.com/goruck/smart-zoneminder.
 
 Copyright (c) 2019 Lindo St. Angel
@@ -48,6 +48,31 @@ imagePaths = glob(args['dataset'] + '/**/*.*', recursive=True)
 # Initialize the list of known encodings and known names.
 knownEncodings = []
 knownNames = []
+
+def resize_to_square(img, size, keep_aspect_ratio=False, interpolation=cv2.INTER_AREA):
+    # Resize image to square shape.
+    # If keep_aspect_ratio=True, then:
+    #   If the original image is lanscape, add black pixels on the bottom-side only.
+    #   If the original image is portrait, add black pixels on the right-side only.
+    (h, w) = img.shape[:2]
+
+    if h == w or keep_aspect_ratio == False:
+        return cv2.resize(img, (size, size), interpolation)
+
+    # Check if image is color. 
+    chan = None if len(img.shape) < 3 else img.shape[2]
+
+    # Determine size of black mask.
+    mask_size = h if h > w else w
+
+    if chan is None:
+        mask = np.zeros((mask_size, mask_size), dtype=img.dtype)
+        mask[:h, :w] = img[:h, :w]
+    else:
+        mask = np.zeros((mask_size, mask_size, chan), dtype=img.dtype)
+        mask[:h, :w, :] = img[:h, :w, :]
+
+    return cv2.resize(mask, (size, size), interpolation)
 
 def dlib_face_det(image):
     # Detect and localize faces using dlib (via face_recognition).
@@ -126,11 +151,12 @@ def tpu_face_det(image):
     # Assumes only one face is in image passed.
 
     # Threshold for valid face detect. 
-    CONFIDENCE_THRES = 0.6
+    CONFIDENCE_THRES = 0.05
     
     # Resize image for face detection.
-    # The tpu face det requires (320, 320).
-    res = cv2.resize(image, dsize=(320, 320), interpolation=cv2.INTER_CUBIC)
+    # The tpu face det model used requires (320, 320).
+    res = resize_to_square(img=image, size=320, keep_aspect_ratio=True,
+        interpolation=cv2.INTER_AREA)
 
     # Detect the (x, y)-coordinates of the bounding boxes corresponding
     # to each face in the input image using the TPU engine.
