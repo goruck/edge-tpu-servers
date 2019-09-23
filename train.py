@@ -67,7 +67,7 @@ def find_best_svm_estimator(X, y, cv):
     print('\n Best estimator:')
     print(grid_search.best_estimator_)
     print('\n Best score:')
-    print(grid_search.best_score_ * 2 - 1)
+    print(grid_search.best_score_)
     print('\n Best hyperparameters:')
     print(grid_search.best_params_)
     return grid_search.best_estimator_
@@ -97,7 +97,7 @@ def find_best_xgb_estimator(X, y, cv, param_comb):
     print(random_search.best_estimator_)
     print('\n Best normalized gini score for %d-fold search with %d parameter combinations:' %
         (FOLDS, PARA_COMB))
-    print(random_search.best_score_ * 2 - 1)
+    print(random_search.best_score_)
     print('\n Best hyperparameters:')
     print(random_search.best_params_)
     return random_search.best_estimator_
@@ -107,7 +107,7 @@ def find_best_xgb_estimator(X, y, cv, param_comb):
     data, labels, test_size=0.20, random_state=RANDOM_SEED, shuffle=True)
 #print('X_train: {} X_test: {} y_train: {} y_test: {}'.format(X_train, X_test, y_train, y_test))
 
-skf = StratifiedKFold(n_splits=FOLDS, shuffle=True, random_state=RANDOM_SEED)
+skf = StratifiedKFold(n_splits=FOLDS)
 
 # Find best svm classifier, evaluate and then save it.
 best_svm = find_best_svm_estimator(X_train, y_train, skf.split(X_train, y_train))
